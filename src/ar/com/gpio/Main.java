@@ -19,7 +19,8 @@ public class Main {
 		
 		try {
 			server = HttpServer.create(new InetSocketAddress(8000), 0);
-			server.createContext("/test", new HttpRequestHandler());
+			server.createContext("/api/v1/output", new HttpOutputRequestHandler());
+			server.createContext("/api/v1/input", new HttpOutputRequestHandler());
 			server.start();
 		} catch (IOException e1) {
 			e1.printStackTrace();

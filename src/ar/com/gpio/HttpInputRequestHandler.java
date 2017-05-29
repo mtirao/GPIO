@@ -10,66 +10,59 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import ar.com.model.Data;
+import ar.com.model.OutputData;
+import ar.com.model.Response;
 
 import com.google.gson.Gson;
 import com.pi4j.io.gpio.GpioController;
 import com.pi4j.io.gpio.GpioFactory;
 import com.pi4j.io.gpio.GpioPinDigitalOutput;
 import com.pi4j.io.gpio.PinState;
-import com.pi4j.io.gpio.RaspiPin;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
-public class HttpRequestHandler implements HttpHandler {
-
+public class HttpInputRequestHandler implements HttpHandler{
+	
 	final GpioController gpio = GpioFactory.getInstance();
-	final GpioPinDigitalOutput led1 = gpio.provisionDigitalOutputPin(
-			RaspiPin.GPIO_00, "My LED", PinState.LOW);
-	final GpioPinDigitalOutput led2 = gpio.provisionDigitalOutputPin(
-			RaspiPin.GPIO_02, "My LED", PinState.LOW);
-	final GpioPinDigitalOutput led3 = gpio.provisionDigitalOutputPin(
-			RaspiPin.GPIO_03, "My LED", PinState.LOW);
-
+	
 	@Override
 	public void handle(HttpExchange t) throws IOException {
-
+		
 		Gson gson = new Gson();
 
-		String response = gson.toJson(new Data("This is the response", 1, 1));
+		String response = ""; 
 
 		Map<String, Object> parameters = new HashMap<String, Object>();
-		t.sendResponseHeaders(200, response.length());
 
 		URI requestedUri = t.getRequestURI();
 		String query = requestedUri.getRawQuery();
 
 		parseQuery(query, parameters);
 
+		
+		
+		if (parameters.get("gpio") != null) {
+			
+			try {
+				int pin = Integer.parseInt(parameters.get("gpio").toString());
+				OutputData data = new OutputData(pin, "");
+				
+				GpioPinDigitalOutput gpioPin = gpio.provisionDigitalOutputPin(
+						data.convertPinToPI4J(), "GPIO Pin", PinState.LOW);
+				
+				response = gson.toJson(new Response(200, "command ok", gpioPin.isHigh()));
+			}catch(Exception e) {
+				response = gson.toJson(new Response(502, "Invalid GPIO number"));
+			}
+		}
+		
 		OutputStream os = t.getResponseBody();
 		os.write(response.getBytes());
 		os.close();
-
-		if (parameters.get("led") != null) {
-			String value = parameters.get("led").toString();
-			switch (Integer.parseInt(value)) {
-			case 1:
-				led1.pulse(1000);
-				break;
-			case 2:
-				led2.pulse(1000);
-				break;
-			case 3:
-				led3.pulse(1000);
-				break;
-			default:
-				led1.pulse(1000);
-				led2.pulse(1000);
-				led3.pulse(1000);
-			}
-		}
+		
 	}
-
+	
+	
 	@SuppressWarnings("unchecked")
 	private void parseQuery(String query, Map<String, Object> parameters)
 			throws UnsupportedEncodingException {
@@ -108,5 +101,6 @@ public class HttpRequestHandler implements HttpHandler {
 			}
 		}
 	}
+
 
 }
