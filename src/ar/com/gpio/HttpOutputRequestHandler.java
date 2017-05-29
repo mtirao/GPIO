@@ -17,8 +17,6 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 
 public class HttpOutputRequestHandler implements HttpHandler {
-
-	final GpioController gpio = GpioFactory.getInstance();
 	
 	
 	@Override
@@ -26,7 +24,7 @@ public class HttpOutputRequestHandler implements HttpHandler {
 
 		Gson gson = new Gson();
 
-		
+		final GpioController gpio = GpioFactory.getInstance();
 
 		
 		InputStreamReader isr = new InputStreamReader(t.getRequestBody(), "utf-8");
@@ -35,35 +33,51 @@ public class HttpOutputRequestHandler implements HttpHandler {
 		
         OutputData data = gson.fromJson(query, OutputData.class);
 
+        GpioPinDigitalOutput gpioPin = null;
+        String response = "";
         
-		
-		GpioPinDigitalOutput gpioPin = gpio.provisionDigitalOutputPin(
-				data.convertPinToPI4J(), "GPIO Pin", PinState.LOW);
-		
-		String response = "";
-		
-		if(data.getState().equalsIgnoreCase("high")) {
-			response = gson.toJson(new Response(200, "Command Ok"));
-			gpioPin.high();
-		}else if(data.getState().equalsIgnoreCase("low")) {
-			response = gson.toJson(new Response(200, "Command Ok"));
-			gpioPin.low();
-		}else if(data.getState().equalsIgnoreCase("toggle")) {
-			response = gson.toJson(new Response(200, "Command Ok"));
-			gpioPin.toggle();
-		} else {
+		try {
 			
-			int time = 0;
-			try {
-				time = Integer.parseInt(data.getState());
-				gpioPin.pulse(time);
-				response = gson.toJson(new Response(200, "Command Ok"));
-			}catch(Exception e) {
-				response = gson.toJson(new Response(501, e.getMessage()));
+			gpioPin = (GpioPinDigitalOutput)gpio.getProvisionedPin(data.convertPinToPI4J());
+			
+			if (gpioPin == null) {
+				gpioPin = gpio.provisionDigitalOutputPin(
+						data.convertPinToPI4J(), "GPIO Pin", PinState.LOW);
 			}
 			
-		}
+			
+			
+			
+			if(data.getState().equalsIgnoreCase("high")) {
+				response = gson.toJson(new Response(200, "Command Ok"));
+				gpioPin.setShutdownOptions(true, PinState.HIGH);
+				gpioPin.high();
+			}else if(data.getState().equalsIgnoreCase("low")) {
+				response = gson.toJson(new Response(200, "Command Ok"));
+				gpioPin.setShutdownOptions(true, PinState.LOW);
+				gpioPin.low();
+			}else if(data.getState().equalsIgnoreCase("toggle")) {
+				response = gson.toJson(new Response(200, "Command Ok"));
+				gpioPin.toggle();
+			} else {
 				
+				int time = 0;
+				try {
+					time = Integer.parseInt(data.getState());
+					gpioPin.pulse(time, true);
+					response = gson.toJson(new Response(200, "Command Ok"));
+				}catch(Exception e) {
+					response = gson.toJson(new Response(501, e.getMessage()));
+				}
+				
+			}
+			
+		}catch(Exception e) {
+			response = gson.toJson(new Response(503, "Gpio error"));
+		}
+		
+	
+		gpio.shutdown();
 
 		t.sendResponseHeaders(200, response.length());
 		
